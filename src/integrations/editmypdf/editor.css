@@ -1,0 +1,716 @@
+/* ---------------------------------------------------------------------------
+   The page and what is drawn over it. The page frame and the overlay rules
+   below the "Page" heading decide where edited text sits against the
+   rendered page: change their colours freely, but not their geometry. The
+   chrome around the pages (bars, rails, panels) lives in chrome.css.
+   --------------------------------------------------------------------------- */
+
+.rotate-handle {
+  position: absolute;
+  z-index: 8;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #2a2a2e;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+}
+
+.rotate-handle:active {
+  cursor: grabbing;
+}
+
+.rotate-handle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.page-scroll-tip {
+  position: absolute;
+  z-index: 7;
+  transform: translateY(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #2a2a2e;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.page-scroll-tip.visible {
+  opacity: 1;
+}
+
+.page-scroll-tip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right: 0;
+  border-left-color: #2a2a2e;
+}
+
+/* ---- Page -----------------------------------------------------------------
+   Geometry below is shared with the overlays in PageStage.tsx. Keep it.
+   --------------------------------------------------------------------------- */
+
+.page-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-turn {
+  position: relative;
+}
+
+.page-frame {
+  position: absolute;
+  background: var(--paper);
+  /* A ring outside the box, not a border: a border would shrink the canvas inside by two pixels
+     while the overlays above it keep the page's full size, so edited text would sit a little off
+     the page's own rendering. */
+  box-shadow:
+    0 0 0 1px var(--paper-edge),
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 14px 36px rgb(0 0 0 / 0.1);
+}
+
+:root[data-appearance="dark"] .page-frame {
+  box-shadow:
+    0 0 0 1px var(--paper-edge),
+    0 2px 4px rgb(0 0 0 / 0.4),
+    0 20px 48px rgb(0 0 0 / 0.55);
+}
+
+.pages.view-ready .page-turn {
+  transition:
+    width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pages.view-ready .page-frame {
+  transition:
+    width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    top 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pages.view-ready .text-box,
+.pages.view-ready .shape-box,
+.pages.view-ready .rotate-handle,
+.pages.view-ready .content-cover,
+.pages.view-ready .content-editor,
+.pages.view-ready .content-graphic,
+.pages.view-ready .content-tail,
+.pages.view-ready .content-glyphs {
+  transition:
+    left 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    top 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pages.view-ready .text-box textarea {
+  transition:
+    font-size 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    min-height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-frame.interacting .text-box,
+.page-frame.interacting .text-box textarea,
+.page-frame.interacting .shape-box,
+.page-frame.interacting .rotate-handle,
+.page-frame.interacting .content-cover,
+.page-frame.interacting .content-editor,
+.page-frame.interacting .content-graphic,
+.page-frame.interacting .content-tail,
+.page-frame.interacting .content-glyphs {
+  transition: none;
+}
+
+.page-frame canvas,
+.marks,
+.hit-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.page-frame canvas {
+  z-index: 0;
+}
+
+.marks {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hit-layer {
+  z-index: 3;
+  touch-action: none;
+}
+
+.tool-pencil,
+.tool-shape {
+  cursor: crosshair;
+}
+
+.tool-emoji,
+.tool-signature {
+  cursor: default;
+}
+
+.tool-text {
+  cursor: crosshair;
+}
+
+.tool-eraser {
+  cursor: cell;
+}
+
+/* The pointer is over a mark that a press would move: the body itself is the handle. */
+.hit-layer.can-move {
+  cursor: grab;
+}
+
+.page-frame.moving .hit-layer {
+  cursor: grabbing;
+}
+
+/* On-paper overlays keep fixed colours: the paper is white in both themes. */
+
+.content-cover,
+.content-editor,
+.content-graphic,
+.content-tail,
+.content-glyphs,
+.content-caret,
+.content-selection,
+.content-underline {
+  position: absolute;
+  margin: 0;
+}
+
+.content-cover {
+  z-index: 2;
+  background: #fff;
+  pointer-events: none;
+}
+
+.content-cover.quiet {
+  background: transparent;
+}
+
+.content-cover.selected,
+.content-graphic.selected {
+  outline: 1.5px solid #1d4ed8;
+  outline-offset: 0;
+}
+
+/* The grip beside an open text box: dragging it moves the edited text on the page. */
+.content-grip {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 16px;
+  margin: 0;
+  border-radius: 4px;
+  background: #1d4ed8;
+  color: #fff;
+  box-shadow: 0 0 0 1px #fff, 0 1px 2px rgba(15, 23, 42, 0.22);
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.content-grip:hover {
+  background: #1e40af;
+}
+
+/* The handle on the box's right edge: dragging it changes the width the text wraps in. */
+.content-grip.resize {
+  cursor: ew-resize;
+}
+
+.content-grip.resize:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 1px;
+}
+
+/* The edited text needs more lines than the original block had, so it now covers what sat below. */
+.content-cover.overflowing {
+  outline: 1.5px dashed #d97706;
+}
+
+.content-editor {
+  z-index: 4;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  overflow: hidden;
+  box-shadow: none;
+  cursor: text;
+}
+
+.content-graphic,
+.content-tail {
+  z-index: 3;
+  pointer-events: none;
+  object-fit: fill;
+}
+
+.content-glyphs {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.content-glyphs img,
+.content-glyphs span,
+.content-underline {
+  position: absolute;
+  top: 0;
+}
+
+.content-caret {
+  z-index: 7;
+  width: 1px;
+  pointer-events: none;
+  animation: content-caret 1s step-end infinite;
+}
+
+.content-selection {
+  z-index: 3;
+  background: rgb(29 78 216 / 25%);
+  pointer-events: none;
+}
+
+@keyframes content-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.content-tag {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  padding: 0 5px;
+  height: 16px;
+  border-radius: 4px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* Alignment guides shown while a mark is dragged: the page's lines run its full length in the
+   accent, the lines of the content block the mark sits over run across that block in coral,
+   dashed. Both sit above the page and its text and below the drag handles. */
+.align-guides {
+  --guide-page: var(--accent);
+  --guide-section: var(--coral);
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* The paper is white in both themes, so the dark theme keeps the light theme's accent and coral
+   rather than its own lighter tints, which would fade on the page. */
+:root[data-appearance="dark"] .align-guides {
+  --guide-page: oklch(0.5 0.19 262);
+  --guide-section: oklch(0.62 0.17 40);
+}
+
+.align-guides svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.align-guide {
+  fill: none;
+  stroke-width: 1;
+}
+
+.align-guide.page {
+  stroke: var(--guide-page);
+}
+
+.align-guide.section {
+  stroke: var(--guide-section);
+  stroke-dasharray: 5 3;
+}
+
+.align-guide-tag {
+  position: absolute;
+  padding: 0 5px;
+  height: 16px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.align-guide-tag.page {
+  background: var(--guide-page);
+}
+
+.align-guide-tag.section {
+  background: var(--guide-section);
+}
+
+.text-box {
+  position: absolute;
+  z-index: 2;
+}
+
+.text-box.selected {
+  z-index: 4;
+}
+
+.edge {
+  position: absolute;
+  z-index: 6;
+  background: transparent;
+  cursor: move;
+  touch-action: none;
+}
+
+.edge-n { top: -8px; left: 12px; right: 12px; height: 14px; }
+.edge-s { bottom: -8px; left: 12px; right: 12px; height: 14px; }
+.edge-e { top: 12px; bottom: 12px; right: -8px; width: 14px; }
+.edge-w { top: 12px; bottom: 12px; left: -8px; width: 14px; }
+
+.text-box {
+  --edge: -3px;
+}
+
+.handle {
+  position: absolute;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #fff, 0 1px 2px rgba(15, 23, 42, 0.22);
+  z-index: 7;
+  min-width: 0;
+  line-height: 0;
+  touch-action: none;
+  appearance: none;
+}
+
+.handle.nw { top: var(--edge); left: var(--edge); transform: translate(-50%, -50%); cursor: nwse-resize; }
+.handle.n { top: var(--edge); left: 50%; transform: translate(-50%, -50%); cursor: ns-resize; }
+.handle.ne { top: var(--edge); right: var(--edge); transform: translate(50%, -50%); cursor: nesw-resize; }
+.handle.e { top: 50%; right: var(--edge); transform: translate(50%, -50%); cursor: ew-resize; }
+.handle.se { right: var(--edge); bottom: var(--edge); transform: translate(50%, 50%); cursor: nwse-resize; }
+.handle.sw { bottom: var(--edge); left: var(--edge); transform: translate(-50%, 50%); cursor: nesw-resize; }
+.handle.s { bottom: var(--edge); left: 50%; transform: translate(-50%, 50%); cursor: ns-resize; }
+.handle.w { top: 50%; left: var(--edge); transform: translate(-50%, -50%); cursor: ew-resize; }
+
+.shape-box {
+  --edge: 0px;
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  color: #1d4ed8;
+  container-type: size;
+}
+
+.shape-box .edge,
+.shape-box .handle {
+  pointer-events: auto;
+}
+
+.shape-box .edge-n,
+.shape-box .edge-s { cursor: ns-resize; }
+.shape-box .edge-e,
+.shape-box .edge-w { cursor: ew-resize; }
+
+/* The grip beside a selected emoji or signature: a handle to move it by, for fingers as much
+   as for pointers. */
+.shape-box .content-grip {
+  top: 50%;
+  left: -22px;
+  transform: translateY(-50%);
+  pointer-events: auto;
+}
+
+@container (max-height: 22px) {
+  .handle.n,
+  .handle.s { display: none; }
+}
+
+@container (max-height: 28px) {
+  .handle.e,
+  .handle.w { display: none; }
+}
+
+@container (max-width: 28px) {
+  .handle.n,
+  .handle.s { display: none; }
+}
+
+.text-box textarea {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.2;
+  outline: 1px dashed transparent;
+  outline-offset: 3px;
+  caret-color: currentColor;
+  cursor: text;
+}
+
+.text-box textarea::placeholder {
+  color: #9a9a9a;
+  font-style: normal;
+  font-weight: 400;
+  text-decoration: none;
+  opacity: 1;
+}
+
+.text-box.selected textarea {
+  outline-color: currentColor;
+}
+
+/* ---- Hover highlight on the page: an accent ring, a tint and the list number ---------------- */
+
+.object-glow {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 6px color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+.object-badge {
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--ff-sans);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow:
+    0 0 0 1.5px #fff,
+    0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+/* ---- What the user changed: yellow under the changed words, a tint over a moved box; drawn only
+   while the mark's row in the object list is under the pointer, so an edit otherwise looks like
+   the rest of the page -------------------------------------------------------------------------- */
+
+/* The paper is white in both themes, so the yellow is pinned rather than themed. */
+.page-frame {
+  --change-mark: rgb(253 224 71 / 0.6);
+  --change-tint: rgb(253 224 71 / 0.28);
+}
+
+.change-mark,
+.change-tint {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Under the glyphs (the editor sits at z 4) and over the cover (z 2) that hides the page's own text. */
+.change-mark {
+  z-index: 3;
+  border-radius: 2px;
+  background: var(--change-mark);
+}
+
+.change-tint {
+  z-index: 3;
+  border-radius: 2px;
+  background: var(--change-tint);
+}
+
+/* The dot before a changed row's title in the object list; one yellow that reads on both panels. */
+.object-change {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  vertical-align: 1px;
+  border-radius: 999px;
+  background: #eab308;
+  box-shadow: 0 0 0 1.5px color-mix(in oklch, #eab308 35%, transparent);
+}
+
+/* ---- Floating formatting bar over the page's own text ---------------------------------------- */
+
+.format-bar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 40;
+  visibility: hidden;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--round-md);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--elev-2);
+  color: var(--ink);
+  font-family: var(--ff-sans);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.format-bar-gap {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--line);
+}
+
+.format-bar-step {
+  width: 24px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--ink);
+}
+
+.format-bar-step:hover {
+  background: var(--section);
+}
+
+.format-bar-step svg {
+  width: 14px;
+  height: 14px;
+}
+
+.format-bar-size {
+  width: 44px;
+  height: 28px;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.format-bar-size::-webkit-outer-spin-button,
+.format-bar-size::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.format-bar-size:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---- Labels between the pages -------------------------------------------- */
+
+.page-number {
+  color: var(--ink-muted);
+  font-family: var(--ff-sans);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.blank-hint {
+  margin: 0 0 4px;
+  color: var(--ink-muted);
+  font-family: var(--ff-sans);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-scroll-tip,
+  .pages.view-ready .page-turn,
+  .pages.view-ready .page-frame,
+  .pages.view-ready .text-box,
+  .pages.view-ready .text-box textarea,
+  .pages.view-ready .shape-box,
+  .pages.view-ready .rotate-handle,
+  .pages.view-ready .content-cover,
+  .pages.view-ready .content-editor,
+  .pages.view-ready .content-graphic,
+  .pages.view-ready .content-tail,
+  .pages.view-ready .content-glyphs {
+    transition: none;
+  }
+}

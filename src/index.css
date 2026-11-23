@@ -1,0 +1,57 @@
+@import 'tailwindcss';
+
+:root {
+  --color-bg: #121725;
+  --color-bg-secondary: #131e38;
+  --color-surface: #172a3a;
+  --color-accent: #44cdf4;
+  --color-text: #edf2fb;
+  --color-muted: #9aa8bc;
+  --font-ui: 'Sora', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-heading: 'Outfit', 'Sora', 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  background: radial-gradient(circle at top right, #1b2746 0%, var(--color-bg) 48%);
+  color: var(--color-text);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-heading {
+  font-family: var(--font-heading);
+}
+
+.pdf-text-layer {
+  pointer-events: none;
+}
+
+.pdf-text-token {
+  position: absolute;
+  display: inline-block;
+  color: transparent;
+  background: transparent;
+  white-space: pre;
+  user-select: text;
+  pointer-events: auto;
+  cursor: text;
+}
+
+.pdf-text-token::selection {
+  background: rgba(34, 211, 238, 0.32);
+  color: transparent;
+}
